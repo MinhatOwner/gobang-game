@@ -90,6 +90,29 @@ h1 {
     transform: translateY(0);
 }
 
+.undo-btn {
+    margin-top: 25px;
+    margin-left: 10px;
+    padding: 12px 40px;
+    font-size: 1.2em;
+    background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+    color: #333;
+    border: 2px solid #999;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: bold;
+}
+
+.undo-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.undo-btn:active {
+    transform: translateY(0);
+}
+
 .winner-display {
     margin-top: 20px;
     padding: 15px 30px;
@@ -112,6 +135,24 @@ h1 {
 
 .winner-display.hidden {
     display: none;
+}
+
+.play-again-btn {
+    margin-top: 15px;
+    padding: 10px 30px;
+    font-size: 1em;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: bold;
+}
+
+.play-again-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
 }
 
 @keyframes fadeIn {

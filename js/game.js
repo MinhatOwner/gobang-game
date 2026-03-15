@@ -14,6 +14,7 @@ let gameMode = 'pvp';           // 'pvp' 双人, 'pve' 人机
 let aiDifficulty = 'medium';    // 'easy', 'medium', 'hard'
 let aiThinking = false;         // AI是否正在思考
 let canvas, ctx;
+let gameHistory = [];           // 落子历史记录 [{row, col, player}, ...]
 
 // DOM 元素
 let currentPlayerEl, winnerDisplayEl;
@@ -25,14 +26,19 @@ function init() {
     currentPlayerEl = document.getElementById('current-player');
     winnerDisplayEl = document.getElementById('winner-display');
 
-    // 设置画布大小
+    // 设置画布大小（支持高分屏）
     const boardSize = CELL_SIZE * (BOARD_SIZE - 1) + PADDING * 2;
-    canvas.width = boardSize;
-    canvas.height = boardSize;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = boardSize * dpr;
+    canvas.height = boardSize * dpr;
+    canvas.style.width = boardSize + 'px';
+    canvas.style.height = boardSize + 'px';
+    ctx.scale(dpr, dpr);
 
     // 绑定事件
     canvas.addEventListener('click', handleClick);
     document.getElementById('restart-btn').addEventListener('click', restartGame);
+    document.getElementById('undo-btn').addEventListener('click', undoGame);
 
     // 绑定模式选择事件
     const modeRadios = document.querySelectorAll('input[name="game-mode"]');
@@ -75,6 +81,11 @@ function restartGame() {
     // 重置游戏状态
     currentPlayer = 1;
     gameOver = false;
+    aiThinking = false;
+    gameHistory = []; // 清空历史记录
+
+    // 启用棋盘交互
+    enableBoard();
 
     // 更新UI
     updateCurrentPlayerUI();
@@ -215,9 +226,13 @@ function handleClick(e) {
     board[row][col] = currentPlayer;
     drawPiece(row, col, currentPlayer);
 
+    // 记录落子历史
+    gameHistory.push({ row, col, player: currentPlayer });
+
     // 检查是否获胜
     if (checkWin(row, col, currentPlayer)) {
         gameOver = true;
+        disableBoard(); // 禁用棋盘交互
         showWinner(currentPlayer);
         return;
     }
@@ -235,7 +250,10 @@ function handleClick(e) {
         // 延迟一点再落子，让UI有反应时间
         setTimeout(() => {
             makeAIMove();
-            aiThinking = false;
+            // 游戏已结束则不再重置 aiThinking
+            if (!gameOver) {
+                aiThinking = false;
+            }
         }, 100);
     }
 }
@@ -286,10 +304,25 @@ function checkWin(row, col, player) {
     return false;
 }
 
+// 禁用棋盘交互
+function disableBoard() {
+    canvas.style.pointerEvents = 'none';
+    canvas.style.cursor = 'default';
+}
+
+// 启用棋盘交互
+function enableBoard() {
+    canvas.style.pointerEvents = 'auto';
+    canvas.style.cursor = 'pointer';
+}
+
 // 显示获胜者
 function showWinner(player) {
     const winnerName = player === 1 ? '黑方' : '白方';
-    winnerDisplayEl.textContent = `🎉 ${winnerName} 获胜！`;
+    winnerDisplayEl.innerHTML = `
+        <div>🎉 ${winnerName} 获胜！</div>
+        <button class="play-again-btn" onclick="restartGame()">再来一局</button>
+    `;
     winnerDisplayEl.className = `winner-display ${player === 1 ? 'black' : 'white'}`;
 }
 
@@ -304,6 +337,12 @@ function updateCurrentPlayerUI() {
 
 // AI落子主逻辑
 function makeAIMove() {
+    // 如果游戏已结束，不执行AI落子
+    if (gameOver) {
+        aiThinking = false;
+        return;
+    }
+
     let move;
 
     switch (aiDifficulty) {
@@ -326,7 +365,9 @@ function makeAIMove() {
 
         if (checkWin(move.row, move.col, currentPlayer)) {
             gameOver = true;
+            disableBoard(); // 禁用棋盘交互
             showWinner(currentPlayer);
+            aiThinking = false;
             return;
         }
 
@@ -334,6 +375,9 @@ function makeAIMove() {
         currentPlayer = 1;
         updateCurrentPlayerUI();
     }
+
+    // 重置AI思考状态
+    aiThinking = false;
 }
 
 // 简单难度 - 随机落子 + 基础防守
@@ -375,8 +419,8 @@ function findBestDefense() {
         }
     }
 
-    // 只防守活四/冲四/活三
-    if (highestThreat >= 100) {
+    // 防守活四/冲四/活三/眠三（降低阈值以防守更多威胁）
+    if (highestThreat >= 50) {
         return bestDefense;
     }
     return null;
@@ -432,17 +476,55 @@ function evaluateThreat(row, col, player) {
     return maxThreat;
 }
 
-// 中等难度 - 位置评估 + 贪心算法
+// 中等难度 - 位置评估 + 贪心算法 + 攻守平衡
 function getMediumAIMove() {
-    // 1. 防守：检测玩家即将获胜的威胁
-    const defenseMove = findBestDefense();
-    if (defenseMove) return defenseMove;
-
-    // 2. 进攻：检查AI是否即将获胜
+    // 1. 进攻优先：检查AI是否即将获胜
     const attackMove = findBestAttack(2);
     if (attackMove) return attackMove;
 
-    // 3. 位置评估选择最优落子
+    // 2. 防守优先：检测玩家即将获胜的威胁（必须防守）
+    const defenseMove = findBestDefense();
+    if (defenseMove) {
+        // 检查防守位置是否也能形成有效进攻
+        board[defenseMove.row][defenseMove.col] = 2;
+        const canAttack = evaluatePosition(defenseMove.row, defenseMove.col, 2) >= 5000;
+        board[defenseMove.row][defenseMove.col] = 0;
+
+        // 如果防守位置也能形成活四及以上，则防守
+        if (canAttack) {
+            return defenseMove;
+        }
+
+        // 否则评估所有位置的综合得分
+        const bestDefenseScore = evaluatePosition(defenseMove.row, defenseMove.col, 2);
+        const allMoves = getValidMovesNearPieces();
+        let bestOverallMove = defenseMove;
+        let bestOverallScore = bestDefenseScore;
+
+        for (const move of allMoves) {
+            // 计算该位置的进攻得分
+            board[move.row][move.col] = 2;
+            const attackScore = evaluatePosition(move.row, move.col, 2);
+            board[move.row][move.col] = 0;
+
+            // 计算该位置的防守得分（如果玩家在这里落子）
+            board[move.row][move.col] = 1;
+            const threatScore = evaluateThreat(move.row, move.col, 1);
+            board[move.row][move.col] = 0;
+
+            // 综合得分 = 进攻得分 + 防守得分 * 1.5（防守更重要）
+            const overallScore = attackScore + threatScore * 1.5;
+
+            if (overallScore > bestOverallScore) {
+                bestOverallScore = overallScore;
+                bestOverallMove = move;
+            }
+        }
+
+        return bestOverallMove;
+    }
+
+    // 3. 位置评估选择最优落子（无明显威胁时）
     let bestScore = -Infinity;
     let bestMoves = [];
     const validMoves = getValidMovesNearPieces();
@@ -811,6 +893,46 @@ function getValidMovesNearPieces() {
     });
 
     return relevantMoves;
+}
+
+// 悔棋功能
+function undoGame() {
+    // 不能悔棋的情况：游戏结束、AI正在思考、游戏历史为空
+    if (gameOver || aiThinking || gameHistory.length === 0) {
+        return;
+    }
+
+    // 人机模式下需要撤销两步（玩家一步 + AI一步）
+    if (gameMode === 'pve' && gameHistory.length >= 2) {
+        // 撤销AI的落子
+        const aiMove = gameHistory.pop();
+        board[aiMove.row][aiMove.col] = 0;
+
+        // 撤销玩家的落子
+        const playerMove = gameHistory.pop();
+        board[playerMove.row][playerMove.col] = 0;
+
+        // 当前玩家应该是黑方（玩家）
+        currentPlayer = 1;
+    } else if (gameHistory.length >= 1) {
+        // 双人模式或人机模式只有一步时
+        const lastMove = gameHistory.pop();
+        board[lastMove.row][lastMove.col] = 0;
+
+        // 切换回上一个玩家
+        currentPlayer = lastMove.player;
+    } else {
+        return;
+    }
+
+    // 重置游戏状态
+    gameOver = false;
+    enableBoard();
+    winnerDisplayEl.className = 'winner-display hidden';
+
+    // 更新UI并重新绘制
+    updateCurrentPlayerUI();
+    drawBoard();
 }
 
 // 获取中心位置
