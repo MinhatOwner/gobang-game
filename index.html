@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋小游戏</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>五子棋</h1>
+        <div class="game-info">
+            <span id="current-player">当前执子：黑方</span>
+        </div>
+        <div class="game-settings">
+            <div class="setting-group">
+                <label>游戏模式：</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="game-mode" value="pvp" checked>
+                        <span>双人对战</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="game-mode" value="pve">
+                        <span>人机对战</span>
+                    </label>
+                </div>
+            </div>
+            <div class="setting-group" id="difficulty-group" style="display: none;">
+                <label>AI难度：</label>
+                <select id="ai-difficulty" class="difficulty-select">
+                    <option value="easy">简单</option>
+                    <option value="medium" selected>中等</option>
+                    <option value="hard">困难</option>
+                </select>
+            </div>
+        </div>
+        <div class="game-board" id="board">
+            <canvas id="board-canvas"></canvas>
+        </div>
+        <button id="restart-btn" class="restart-btn">重新开始</button>
+        <div id="winner-display" class="winner-display hidden"></div>
+    </div>
+    <script src="js/game.js"></script>
+</body>
+</html>
